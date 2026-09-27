@@ -32,14 +32,13 @@ Beating your own previous best mid-game plays a short disco-style celebration ji
 
 ## Contributing
 
-Contributions are welcome, from bug fixes to new features. The repository's top-level `CONTRIBUTING.md` covers skills, not this game. Use this section instead.
+Contributions are welcome, from bug fixes to new features.
 
 ### Run it locally
 
 Open `index.html` in a browser. If your browser restricts `localStorage` on `file://` pages, serve the folder instead:
 
 ```sh
-cd examples/space-invaders
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
@@ -63,3 +62,7 @@ The script is split into sections marked by comments: backdrop, canvases, sound,
 - Check the touch controls at phone width, on a real phone or in your browser's device emulation.
 - Make sure the browser console shows no errors.
 - Fork the repository, work on a branch, and open a pull request against `main`. Say in the description what you changed and how you tested it.
+
+## Notes
+
+A fan remake for fun. Space Invaders is a trademark of Taito; this project is not affiliated with or endorsed by them.
