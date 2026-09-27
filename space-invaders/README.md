@@ -34,14 +34,36 @@ Beating your own previous best mid-game plays a short disco-style celebration ji
 
 Contributions are welcome, from bug fixes to new features.
 
-### Run it locally
+### Step by step
 
-Open `index.html` in a browser. If your browser restricts `localStorage` on `file://` pages, serve the folder instead:
+1. **Fork the repository.** Open [kernpartner/games](https://github.com/kernpartner/games) and select **Fork** at the top right. You get your own copy that you can push to.
+2. **Clone your fork and create a branch:**
 
-```sh
-python3 -m http.server 8000
-# then open http://localhost:8000
-```
+   ```sh
+   git clone https://github.com/<your-username>/games.git
+   cd games/space-invaders
+   git checkout -b my-change
+   ```
+
+3. **Run the game.** Open `index.html` in a browser. If your browser restricts `localStorage` on `file://` pages, serve the folder instead:
+
+   ```sh
+   python3 -m http.server 8000
+   # then open http://localhost:8000
+   ```
+
+4. **Make your change.** Follow the ground rules below, then work through [Before you open a pull request](#before-you-open-a-pull-request).
+5. **Commit and push to your fork:**
+
+   ```sh
+   git add .
+   git commit -m "Say what you changed"
+   git push -u origin my-change
+   ```
+
+6. **Open a pull request.** Your fork on GitHub shows a **Compare & pull request** button. Target `kernpartner/games` on `main`, and say in the description what you changed and how you tested it.
+
+For a small fix you can skip the clone: open the file on GitHub and select the pencil icon. GitHub forks the repository and opens the pull request for you.
 
 ### Ground rules
 
@@ -61,7 +83,6 @@ The script is split into sections marked by comments: backdrop, canvases, sound,
 - Play at least one full wave with the keyboard, and check that pause, resume and sound on/off work.
 - Check the touch controls at phone width, on a real phone or in your browser's device emulation.
 - Make sure the browser console shows no errors.
-- Fork the repository, work on a branch, and open a pull request against `main`. Say in the description what you changed and how you tested it.
 
 ## Notes
 

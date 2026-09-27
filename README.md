@@ -9,3 +9,7 @@ Browser remakes of arcade classics. Each game is a single `index.html` with no b
 Every game shares one cabinet: scoreboard, player sign-in with a per-player game history, pause, synthesized sound, and touch controls on phones. Each folder's README covers controls, rules and how to contribute.
 
 New games are built in a private workspace and land here, with their full history, once they are ready.
+
+## Contributing
+
+Fork this repository, work on a branch, and open a pull request against `main`. Each game's README has step-by-step instructions, its ground rules and a test checklist, for example [Space Invaders](space-invaders/README.md#contributing).
