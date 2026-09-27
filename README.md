@@ -2,6 +2,8 @@
 
 Browser remakes of arcade classics. Each game is a single `index.html` with no build step and no dependencies beyond Google Fonts: open it in a browser and play.
 
+The games are a series of experiments by Thomas to evaluate the capabilities of frontier large language models (LLMs). Each game's code, tests and documentation were produced with an AI coding agent working from Thomas's requests.
+
 | Game | Folder | Highlights |
 |------|--------|------------|
 | Space Invaders | [`space-invaders/`](space-invaders/) | 224×256 cabinet playfield, eroding shields, mystery-ship score table, disco jingle for a new personal best |

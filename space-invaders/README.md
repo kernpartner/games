@@ -2,6 +2,21 @@
 
 A single-file browser remake of the 1978 arcade game. Open `index.html` in any modern browser; there is no build step and no dependencies beyond two Google Fonts.
 
+> **About this project:** this game is one of a [series of experiments](../README.md) by Thomas to evaluate the capabilities of frontier large language models (LLMs). The code, tests and documentation were produced with an AI coding agent working from Thomas's requests.
+
+## How the original was made
+
+Space Invaders was created by Tomohiro Nishikado at Taito and released in 1978. By his own accounts, the game itself was quick to write: about 3 to 4 months of programming. Most of the effort went into what came before it. Taito had no microcomputer development system, so Nishikado built the hardware around an Intel 8080 and his own development tools largely by himself, down to making his own RAM to hold instructions and programming each ROM chip separately.
+
+His interviews give slightly different totals. In one, setting up the development environment took about 6 months before the programming started. In a 2017 interview he said the whole project took "close to one and a half years, and half of that time was used to develop the hardware and development tools." So building the tools took about half the time or a little more, not the overwhelming majority that is sometimes claimed.
+
+Sources:
+
+- [Tomohiro Nishikado – 2000 Developer Interview (shmuplations.com)](https://shmuplations.com/nishikado/)
+- [Space Invaders – 30th Anniversary Interview (shmuplations.com)](https://shmuplations.com/spaceinvaders/)
+- [How Tomohiro Nishikado created Space Invaders 46 years ago (GamesBeat)](https://gamesbeat.com/how-tomohiro-nishikado-created-space-invaders-46-years-ago-exclusive-interview/)
+- [Tomohiro Nishikado Revisits His 1978 Game Space Invaders (The New Stack)](https://thenewstack.io/tomohiro-nishikado-revisits-his-1978-game-space-invaders/)
+
 ## Controls
 
 | Action | Keyboard | Touch |
