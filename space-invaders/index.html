@@ -93,6 +93,7 @@
     background: rgba(7, 9, 25, 0.84);
     text-align: center;
   }
+  .ov { overflow-y: auto; }
   .card { display: grid; gap: 3.4cqi; justify-items: center; }
   .ov h1, .ov h2 {
     margin: 0;
@@ -148,6 +149,43 @@
     outline-offset: 3px;
   }
   .hint { font-size: max(11px, 2.7cqi); color: var(--dim); line-height: 1.5; }
+  .signin, .ready { display: grid; gap: 2.2cqi; justify-items: center; }
+  .signin label, .greet {
+    font-family: var(--display);
+    font-size: max(12px, 3.4cqi);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .greet span { color: var(--green); }
+  .signin-row { display: flex; gap: 2cqi; flex-wrap: wrap; justify-content: center; }
+  .signin input {
+    width: 14ch;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-family: var(--display);
+    font-size: max(14px, 4.6cqi);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--phosphor);
+    background: var(--deep);
+    border: 1px solid var(--line);
+    padding: 1.2cqi 2cqi;
+  }
+  .signin input:focus { outline: 2px solid var(--green); outline-offset: 2px; border-color: transparent; }
+  .err { font-size: max(11px, 2.7cqi); color: var(--red); max-width: 40ch; }
+  .link {
+    font-family: var(--body);
+    font-size: max(11px, 2.7cqi);
+    color: var(--dim);
+    background: none;
+    border: 0;
+    padding: 0.6cqi;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .link:hover { color: var(--phosphor); }
+  .link:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
   .final { font-family: var(--display); font-size: max(14px, 5cqi); font-variant-numeric: tabular-nums; }
   .newhi { font-family: var(--display); font-size: max(12px, 3.6cqi); color: var(--red); text-transform: uppercase; letter-spacing: 0.1em; }
 
@@ -220,6 +258,31 @@
   .keys { width: var(--gw); max-width: 100%; margin: 0; font-size: 12px; color: var(--dim); text-align: center; line-height: 1.6; }
   .keys kbd { font-family: inherit; color: var(--phosphor); border: 1px solid var(--line); padding: 0 5px; }
   .touch { display: none; }
+  .board { width: var(--gw); max-width: 100%; display: grid; gap: 8px; padding-block: 14px 4px; }
+  .board h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 16px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .board-list { list-style: none; margin: 0; padding: 0; font-family: var(--display); font-variant-numeric: tabular-nums; }
+  .board-list li {
+    display: grid;
+    grid-template-columns: 3ch minmax(0, 1fr) auto 5ch;
+    gap: 12px;
+    align-items: baseline;
+    padding-block: 6px;
+    border-bottom: 1px solid var(--line);
+    text-transform: uppercase;
+  }
+  .board-list .rank, .board-list .wave { color: var(--dim); }
+  .board-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board-list .pts { text-align: right; }
+  .board-list li.me .name { color: var(--green); }
+  .board-list li.fresh { background: rgba(255, 90, 110, 0.12); }
+  .board-list li.fresh .pts { color: var(--red); }
+  .board-empty, .board-note { margin: 0; font-size: 12px; color: var(--dim); line-height: 1.6; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   @media (pointer: coarse) {
@@ -237,7 +300,7 @@
 <body>
 <main class="cab">
   <header class="hud" aria-label="Scoreboard">
-    <div><span class="lbl">Score&lt;1&gt;</span><span class="val" id="score">0000</span></div>
+    <div><span class="lbl" id="scoreLbl">Score&lt;1&gt;</span><span class="val" id="score">0000</span></div>
     <div class="c"><span class="lbl">Hi-Score</span><span class="val" id="hi">0000</span></div>
     <div class="r"><span class="lbl">Wave</span><span class="val" id="wave">1</span></div>
   </header>
@@ -256,9 +319,22 @@
           <li><span class="ico" data-sprite="crab"></span><span>= 20 points</span></li>
           <li><span class="ico" data-sprite="octopus"></span><span>= 10 points</span></li>
         </ul>
-        <button class="btn" id="btnPlay" type="button">Play</button>
+        <form class="signin" id="signin" novalidate hidden>
+          <label for="playerName">Enter your name to play</label>
+          <div class="signin-row">
+            <input id="playerName" name="playerName" type="text" maxlength="12" list="knownPlayers" autocomplete="nickname" autocapitalize="characters" spellcheck="false" required aria-describedby="nameErr">
+            <button class="btn" type="submit">Start</button>
+          </div>
+          <p class="err" id="nameErr" role="alert" hidden></p>
+        </form>
+        <datalist id="knownPlayers"></datalist>
+        <div class="ready" id="ready" hidden>
+          <p class="greet">Player <span id="greetName"></span></p>
+          <button class="btn" id="btnPlay" type="button">Play</button>
+          <button class="link" id="btnSwitchTitle" type="button">Not you? Switch player</button>
+        </div>
         <p class="hint kbd">Enter to start. Extra laser cannon at 1500.</p>
-        <p class="hint touch">Tap Play, then steer with the buttons below.</p>
+        <p class="hint touch">Start, then steer with the buttons below.</p>
       </div>
     </section>
 
@@ -276,7 +352,9 @@
         <p class="hint" id="overWhy"></p>
         <p class="final">Score <span id="finalScore">0000</span></p>
         <p class="newhi" id="newHi" hidden>New hi-score</p>
+        <p class="hint" id="overRank"></p>
         <button class="btn" id="btnAgain" type="button">Play again</button>
+        <button class="link" id="btnSwitchOver" type="button">Switch player</button>
         <p class="hint kbd">Enter to play again</p>
       </div>
     </section>
@@ -293,6 +371,12 @@
     <button class="mute" id="mute" type="button">Sound on</button>
   </footer>
   <p class="keys kbd"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move &middot; <kbd>Space</kbd> fire &middot; <kbd>P</kbd> pause &middot; <kbd>M</kbd> sound</p>
+  <section class="board" aria-labelledby="boardHead">
+    <h2 id="boardHead">High scores</h2>
+    <ol class="board-list" id="boardList"></ol>
+    <p class="board-empty" id="boardEmpty">No scores yet. Finish a game to set the first one.</p>
+    <p class="board-note">Players and scores are saved in this browser, so everyone who plays on this device shares one table.</p>
+  </section>
   <p class="sr" id="status" aria-live="polite"></p>
 </main>
 
@@ -313,7 +397,9 @@
   const START_TOPS = [64, 80, 88, 96, 96, 104, 104, 104];
   const UFO_TABLE = [100, 50, 50, 100, 150, 100, 100, 50, 300, 100, 100, 100, 50, 150, 100];
   const WHITE = '#e9edf7', RED = '#ff5a6e', GREEN = '#63e394';
-  const HI_KEY = 'space-invaders-hi', MUTE_KEY = 'space-invaders-muted';
+  const PLAYERS_KEY = 'space-invaders-players', MUTE_KEY = 'space-invaders-muted';
+  const BOARD_SIZE = 10;
+  const NAME_RE = /^[A-Z0-9 ._-]{1,12}$/;
 
   const $ = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -576,18 +662,68 @@
   })();
 
   // ---------- Game state ----------
-  function loadHi() {
-    try { return parseInt(localStorage.getItem(HI_KEY) || '0', 10) || 0; } catch (e) { return 0; }
+  // ---------- Players and high scores (kept in this browser) ----------
+  // Falls back to memory for the visit when storage is blocked.
+  let memoryCopy = null;
+  function loadProfile() {
+    let raw = memoryCopy;
+    try { raw = localStorage.getItem(PLAYERS_KEY) ?? memoryCopy; } catch (e) { /* storage unavailable */ }
+    let d = null;
+    try { d = JSON.parse(raw); } catch (e) { /* corrupt or empty */ }
+    const out = { current: '', players: {}, scores: [] };
+    if (!d || typeof d !== 'object') return out;
+    if (d.players && typeof d.players === 'object') {
+      for (const [name, p] of Object.entries(d.players)) {
+        if (NAME_RE.test(name) && p) out.players[name] = { best: Number(p.best) || 0, games: Number(p.games) || 0 };
+      }
+    }
+    if (Array.isArray(d.scores)) {
+      out.scores = d.scores
+        .filter((e) => e && NAME_RE.test(e.name) && Number.isFinite(e.score) && e.score > 0)
+        .map((e) => ({ name: e.name, score: e.score, wave: Number(e.wave) || 1, at: Number(e.at) || 0 }))
+        .sort((a, b) => b.score - a.score || a.at - b.at)
+        .slice(0, BOARD_SIZE);
+    }
+    if (typeof d.current === 'string' && out.players[d.current]) out.current = d.current;
+    return out;
   }
-  function saveHi() {
-    try { localStorage.setItem(HI_KEY, String(game.hi)); } catch (e) { /* storage unavailable */ }
+  function saveProfile() {
+    memoryCopy = JSON.stringify(profile);
+    try { localStorage.setItem(PLAYERS_KEY, memoryCopy); } catch (e) { /* storage unavailable */ }
+  }
+  const profile = loadProfile();
+  const boardBest = () => (profile.scores.length ? profile.scores[0].score : 0);
+  const cleanName = (v) => v.trim().replace(/\s+/g, ' ').toUpperCase();
+
+  function signIn(name) {
+    profile.current = name;
+    if (!profile.players[name]) profile.players[name] = { best: 0, games: 0 };
+    saveProfile();
+  }
+
+  function recordResult() {
+    const name = profile.current;
+    const p = profile.players[name] || (profile.players[name] = { best: 0, games: 0 });
+    const personalBest = p.games > 0 && game.score > p.best;
+    p.games++;
+    p.best = Math.max(p.best, game.score);
+    let rank = 0, entry = null;
+    if (game.score > 0) {
+      entry = { name, score: game.score, wave: game.wave, at: Date.now() };
+      profile.scores.push(entry);
+      profile.scores.sort((a, b) => b.score - a.score || a.at - b.at);
+      profile.scores = profile.scores.slice(0, BOARD_SIZE);
+      rank = profile.scores.indexOf(entry) + 1;
+    }
+    saveProfile();
+    return { rank, personalBest, entry: rank ? entry : null };
   }
 
   const game = {
     state: 'title', // title | play | dying | clear | over
     paused: false,
     score: 0,
-    hi: loadHi(),
+    hi: boardBest(),
     hiAtStart: 0,
     lives: 3,
     wave: 1,
@@ -981,9 +1117,10 @@
   let hudKey = '';
 
   function hud() {
-    const key = `${game.score}|${game.hi}|${game.wave}|${game.lives}`;
+    const key = `${game.score}|${game.hi}|${game.wave}|${game.lives}|${profile.current}`;
     if (key === hudKey) return;
     hudKey = key;
+    $('scoreLbl').textContent = profile.current ? `Score<${profile.current}>` : 'Score<1>';
     $('score').textContent = pad4(game.score);
     $('hi').textContent = pad4(game.hi);
     $('wave').textContent = String(game.wave);
@@ -1019,7 +1156,66 @@
     });
   })();
 
+  let freshEntry = null;
+
+  function renderBoard() {
+    const list = $('boardList');
+    list.textContent = '';
+    profile.scores.forEach((e, i) => {
+      const li = document.createElement('li');
+      if (e.name === profile.current) li.classList.add('me');
+      if (e === freshEntry) li.classList.add('fresh');
+      for (const [cls, text] of [['rank', String(i + 1).padStart(2, '0')], ['name', e.name], ['wave', `W${e.wave}`], ['pts', pad4(e.score)]]) {
+        const span = document.createElement('span');
+        span.className = cls;
+        span.textContent = text;
+        li.appendChild(span);
+      }
+      list.appendChild(li);
+    });
+    $('boardEmpty').hidden = profile.scores.length > 0;
+  }
+
+  const nameInput = $('playerName');
+  const nameErr = $('nameErr');
+
+  function showTitle(askName) {
+    const needName = askName || !profile.current;
+    $('signin').hidden = !needName;
+    $('ready').hidden = needName;
+    $('greetName').textContent = profile.current;
+    nameErr.hidden = true;
+    const known = $('knownPlayers');
+    known.textContent = '';
+    Object.entries(profile.players)
+      .sort((a, b) => b[1].games - a[1].games)
+      .forEach(([name]) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        known.appendChild(opt);
+      });
+    $('ovOver').hidden = true;
+    $('ovTitle').hidden = false;
+  }
+
+  function switchPlayer() {
+    if (game.state === 'over') {
+      game.state = 'title';
+      player.x = 16;
+      player.alive = true;
+      buildWave();
+    }
+    showTitle(true);
+    nameInput.value = '';
+    nameInput.focus({ preventScroll: true });
+  }
+
   function startGame() {
+    if (!profile.current) {
+      showTitle(true);
+      nameInput.focus({ preventScroll: true });
+      return;
+    }
     sfx.init();
     game.score = 0;
     game.lives = 3;
@@ -1028,7 +1224,10 @@
     game.celebrated = false;
     $('hi').classList.remove('record');
     game.invaded = false;
+    game.hi = boardBest();
     game.hiAtStart = game.hi;
+    freshEntry = null;
+    renderBoard();
     shotsFired = 0;
     player.x = 16;
     player.alive = true;
@@ -1046,14 +1245,21 @@
     bombs = [];
     shot = null;
     if (ufo) { ufo = null; sfx.ufoStop(); }
-    saveHi();
+    const result = recordResult();
+    freshEntry = result.entry;
+    renderBoard();
     const newHi = game.score > game.hiAtStart;
+    const name = profile.current;
+    let rankText = game.score > 0 ? `${name} didn't reach the top ${BOARD_SIZE} this time.` : 'No points this time.';
+    if (result.rank) rankText = `${name} placed #${result.rank} on the high-score table.`;
+    if (result.personalBest) rankText += ` New personal best for ${name}.`;
+    $('overRank').textContent = rankText;
     $('overWhy').textContent = game.invaded ? 'The invaders reached the ground.' : 'Your last laser cannon is gone.';
     $('finalScore').textContent = pad4(game.score);
     $('newHi').hidden = !newHi;
     $('ovOver').hidden = false;
     $('btnAgain').focus({ preventScroll: true });
-    statusEl.textContent = `Game over. Score ${game.score}.${newHi ? ' New hi-score.' : ''}`;
+    statusEl.textContent = `Game over. Score ${game.score}. ${rankText}`;
   }
 
   const inRound = () => game.state === 'play' || game.state === 'dying' || game.state === 'clear';
@@ -1091,9 +1297,11 @@
   const keys = { left: false, right: false, fire: false };
   const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'fire', ArrowUp: 'fire', KeyW: 'fire' };
   const onButton = (e) => e.target instanceof Element && e.target.closest('button');
+  const onField = (e) => e.target instanceof Element && e.target.closest('input, textarea, select');
 
   window.addEventListener('keydown', (e) => {
     sfx.init();
+    if (onField(e)) return;
     const k = KEYMAP[e.code];
     if (k) {
       if (onButton(e) && !(inRound() && !game.paused)) return;
@@ -1111,17 +1319,31 @@
   });
   window.addEventListener('keyup', (e) => {
     const k = KEYMAP[e.code];
-    if (!k) return;
+    if (!k || onField(e)) return;
     keys[k] = false;
     if (!onButton(e) || (inRound() && !game.paused)) e.preventDefault();
   });
   window.addEventListener('pointerdown', () => sfx.init());
   window.addEventListener('blur', () => { keys.left = keys.right = keys.fire = false; autoPause(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
-  window.addEventListener('pagehide', saveHi);
 
   $('btnPlay').addEventListener('click', startGame);
   $('btnAgain').addEventListener('click', startGame);
+  $('btnSwitchTitle').addEventListener('click', switchPlayer);
+  $('btnSwitchOver').addEventListener('click', switchPlayer);
+  $('signin').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = cleanName(nameInput.value);
+    if (!NAME_RE.test(name)) {
+      nameErr.textContent = 'Use 1 to 12 letters, numbers, spaces, dots, dashes or underscores.';
+      nameErr.hidden = false;
+      nameInput.focus({ preventScroll: true });
+      return;
+    }
+    signIn(name);
+    showTitle(false);
+    startGame();
+  });
   $('btnResume').addEventListener('click', () => setPaused(false));
   muteBtn.addEventListener('click', () => { sfx.init(); toggleMute(); });
 
@@ -1144,6 +1366,8 @@
 
   // ---------- Main loop ----------
   buildWave();
+  showTitle(false);
+  renderBoard();
   hud();
   let last = performance.now(), acc = 0;
   function frame(now) {

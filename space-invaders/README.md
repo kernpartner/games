@@ -20,7 +20,13 @@ A single-file browser remake of the 1978 arcade game. Open `index.html` in any m
 - Shields and the ground line erode pixel by pixel from both sides' shots, and invaders chew through shields as they descend.
 - Extra laser cannon at 1500 points. Each new wave starts lower. If the invaders reach the ground, the game ends whatever your lives.
 
-The hi-score and sound preference are kept in `localStorage`. Beating your previous hi-score mid-game plays a short disco-style celebration jingle. It's an original tune, synthesized live with WebAudio, and flashes the hi-score counter.
+## Players and high scores
+
+Each player enters a name (1 to 12 letters, numbers, spaces, dots, dashes or underscores) before their first game. The name shows next to the score, and every game is recorded under it: games played, personal best, and a place on the top-10 high-score table below the playfield. Use **Switch player** on the title or game-over screen to hand the game to someone else. Names you have used before are suggested as you type.
+
+Players, scores and the sound preference are kept in `localStorage`, so the table belongs to the browser: everyone who plays on the same device shares it, and it isn't synced between devices. If storage is blocked, as in some private windows, everything still works for the visit but is forgotten when the page closes.
+
+Beating your previous hi-score mid-game plays a short disco-style celebration jingle. It's an original tune, synthesized live with WebAudio, and flashes the hi-score counter.
 
 ## Contributing
 
