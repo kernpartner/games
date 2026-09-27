@@ -20,18 +20,15 @@ A single-file browser remake of the 1978 arcade game. Open `index.html` in any m
 - Shields and the ground line erode pixel by pixel from both sides' shots, and invaders chew through shields as they descend.
 - Extra laser cannon at 1500 points. Each new wave starts lower. If the invaders reach the ground, the game ends whatever your lives.
 
-## Players and the leaderboard
+## Players and their game history
 
-Each player enters a name (1 to 12 letters, numbers, spaces, dots, dashes or underscores) before their first game. The name shows next to the score, and every game counts toward that player's games played and personal best. Use **Switch player** on the title or game-over screen to hand the game to someone else. Names you have used before are suggested as you type.
+Each player enters a name (1 to 12 letters, numbers, spaces, dots, dashes or underscores) before their first game. The name shows next to the score as `SCORE<NAME>`, and the HI-SCORE counter shows that player's own best. Use **Switch player** on the title or game-over screen to hand the game to someone else. Names you have used before are suggested as you type.
 
-The leaderboard below the playfield lists the top 10 players by their best game. Where it lives depends on how the page is opened:
+Below the playfield, each player has their own record: games played, their best score and wave, and their last 10 games, which you can sort by **Latest** or **Best**. The last 50 games per player are stored. The game-over screen says which game number it was and how it compares with the player's best.
 
-- **Published as a claude.ai artifact with the `db` capability:** one shared leaderboard for everyone who opens the page. Each player's best is one document in the artifact's `leaderboard` collection, and it's only rewritten when that player beats it. Posting needs Contributor access or higher. Viewers still see the board, and their own scores are kept in their browser. Rows read from the store are validated and rendered as text only.
-- **Opened as a plain file or from any other host:** there is no shared store, so the leaderboard is built from the players saved in this browser, and everyone playing on the same device shares it.
+Players and the sound preference are kept in `localStorage`, so each browser keeps its own records. They aren't shared between devices or with other people. If storage is blocked, as in some private windows, everything still works for the visit but is forgotten when the page closes.
 
-Player stats and the sound preference are kept in `localStorage`. If storage is blocked, as in some private windows, everything still works for the visit but is forgotten when the page closes.
-
-Beating your previous hi-score mid-game plays a short disco-style celebration jingle. It's an original tune, synthesized live with WebAudio, and flashes the hi-score counter.
+Beating your own previous best mid-game plays a short disco-style celebration jingle, an original tune synthesized live with WebAudio. It also shows a "New personal best!" banner and flashes the hi-score counter.
 
 ## Contributing
 

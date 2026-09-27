@@ -269,7 +269,7 @@
   .board-list { list-style: none; margin: 0; padding: 0; font-family: var(--display); font-variant-numeric: tabular-nums; }
   .board-list li {
     display: grid;
-    grid-template-columns: 3ch minmax(0, 1fr) auto 5ch;
+    grid-template-columns: 4ch minmax(0, 1fr) auto 5ch;
     gap: 12px;
     align-items: baseline;
     padding-block: 6px;
@@ -279,9 +279,25 @@
   .board-list .rank, .board-list .wave { color: var(--dim); }
   .board-list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .board-list .pts { text-align: right; }
-  .board-list li.me .name { color: var(--green); }
+  .board-list li.best .pts, .board-list li.best .name { color: var(--green); }
   .board-list li.fresh { background: rgba(255, 90, 110, 0.12); }
-  .board-list li.fresh .pts { color: var(--red); }
+  .board-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .seg { display: flex; }
+  .seg-btn {
+    font-family: var(--display);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .seg-btn + .seg-btn { border-left: 0; }
+  .seg-btn[aria-pressed="true"] { color: var(--phosphor); background: var(--deep); }
+  .seg-btn:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+  .board-stats { margin: 0; font-family: var(--display); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--green); font-variant-numeric: tabular-nums; }
   .board-empty, .board-note { margin: 0; font-size: 12px; color: var(--dim); line-height: 1.6; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -351,7 +367,7 @@
         <h2 id="overHead">Game over</h2>
         <p class="hint" id="overWhy"></p>
         <p class="final">Score <span id="finalScore">0000</span></p>
-        <p class="newhi" id="newHi" hidden>New hi-score</p>
+        <p class="newhi" id="newHi" hidden>New personal best</p>
         <p class="hint" id="overRank"></p>
         <button class="btn" id="btnAgain" type="button">Play again</button>
         <button class="link" id="btnSwitchOver" type="button">Switch player</button>
@@ -372,10 +388,17 @@
   </footer>
   <p class="keys kbd"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move &middot; <kbd>Space</kbd> fire &middot; <kbd>P</kbd> pause &middot; <kbd>M</kbd> sound</p>
   <section class="board" aria-labelledby="boardHead">
-    <h2 id="boardHead">Leaderboard</h2>
+    <div class="board-head">
+      <h2 id="boardHead">Your games</h2>
+      <div class="seg" role="group" aria-label="Order games by">
+        <button class="seg-btn" id="sortLatest" type="button" aria-pressed="true">Latest</button>
+        <button class="seg-btn" id="sortBest" type="button" aria-pressed="false">Best</button>
+      </div>
+    </div>
+    <p class="board-stats" id="boardStats" hidden></p>
     <ol class="board-list" id="boardList"></ol>
-    <p class="board-empty" id="boardEmpty">No scores yet. Finish a game to set the first one.</p>
-    <p class="board-note" id="boardNote"></p>
+    <p class="board-empty" id="boardEmpty">Enter your name and play to start your record.</p>
+    <p class="board-note">Each player's games are saved in this browser. Use Switch player to see someone else's record.</p>
   </section>
   <p class="sr" id="status" aria-live="polite"></p>
 </main>
@@ -399,6 +422,7 @@
   const WHITE = '#e9edf7', RED = '#ff5a6e', GREEN = '#63e394';
   const PLAYERS_KEY = 'space-invaders-players', MUTE_KEY = 'space-invaders-muted';
   const BOARD_SIZE = 10;
+  const HISTORY_SIZE = 50;
   const NAME_RE = /^[A-Z0-9 ._-]{1,12}$/;
 
   const $ = (id) => document.getElementById(id);
@@ -598,7 +622,7 @@
       setMuted(m) { if (master) master.gain.setValueAtTime(m ? 0 : VOL, ac.currentTime); },
       suspend() { if (ac && ac.state === 'running') ac.suspend().catch(() => {}); },
       resume() { if (ac && ac.state === 'suspended') ac.resume().catch(() => {}); },
-      march(i) { tone([98, 87.3, 77.8, 73.4][i], 0.09, { vol: 0.16 }); },
+      march(i) { tone([98, 87.3, 77.8, 73.4][i], 0.09, { vol: 0.28 }); },
       shoot() { tone(880, 0.14, { vol: 0.04, f1: 180 }); noise(0.08, 0.05, 5000); },
       kill() { noise(0.22, 0.22, 3000); },
       death() { noise(1.0, 0.35, 1400); tone(160, 0.9, { type: 'sawtooth', vol: 0.05, f1: 40 }); },
@@ -662,10 +686,8 @@
   })();
 
   // ---------- Game state ----------
-  // ---------- Players and leaderboard ----------
-  // Each player's stats live in this browser (memory only when storage is
-  // blocked). The leaderboard is shared through the artifact's db when the
-  // page is published with it, and built from local players otherwise.
+  // ---------- Players and their game history ----------
+  // Kept in this browser; in memory only for the visit when storage is blocked.
   let memoryCopy = null;
   function loadProfile() {
     let raw = memoryCopy;
@@ -677,11 +699,16 @@
     if (d.players && typeof d.players === 'object') {
       for (const [name, p] of Object.entries(d.players)) {
         if (!NAME_RE.test(name) || !p) continue;
+        const history = Array.isArray(p.history) ? p.history
+          .filter((g) => g && Number.isFinite(g.score) && g.score >= 0)
+          .map((g) => ({ n: Number(g.n) || 0, score: g.score, wave: Number(g.wave) || 1, at: Number(g.at) || 0 }))
+          .slice(0, HISTORY_SIZE) : [];
         out.players[name] = {
           best: Number(p.best) || 0,
           games: Number(p.games) || 0,
           wave: Number(p.wave) || 1,
           at: Number(p.at) || 0,
+          history,
         };
       }
     }
@@ -694,7 +721,9 @@
   }
   const profile = loadProfile();
   const cleanName = (v) => v.trim().replace(/\s+/g, ' ').toUpperCase();
-  const newPlayer = () => ({ best: 0, games: 0, wave: 1, at: 0 });
+  const newPlayer = () => ({ best: 0, games: 0, wave: 1, at: 0, history: [] });
+  const currentPlayer = () => (profile.current ? profile.players[profile.current] : null);
+  const playerBest = () => (currentPlayer() ? currentPlayer().best : 0);
 
   function signIn(name) {
     profile.current = name;
@@ -702,93 +731,23 @@
     saveProfile();
   }
 
-  // mode: 'local' until the shared leaderboard delivers its first snapshot.
-  const board = { mode: 'local', db: null, rows: [], canWrite: true, problem: '' };
-  const byBest = (a, b) => b.best - a.best || a.at - b.at;
-
-  function validRow(d) {
-    if (!d || !NAME_RE.test(d.name)) return null;
-    const best = Number(d.best), wave = Number(d.wave);
-    if (!Number.isInteger(best) || best <= 0 || best > 999999) return null;
-    return { name: d.name, best, wave: Number.isInteger(wave) && wave > 0 && wave < 1000 ? wave : 1, at: Number(d.at) || 0 };
-  }
-
-  function allRows() {
-    if (board.mode === 'shared') return board.rows.slice().sort(byBest);
-    return Object.entries(profile.players)
-      .filter(([, p]) => p.best > 0)
-      .map(([name, p]) => ({ name, best: p.best, wave: p.wave, at: p.at }))
-      .sort(byBest);
-  }
-  const boardBest = () => { const rows = allRows(); return rows.length ? rows[0].best : 0; };
-
-  // Document ids allow only letters, digits and _ - . ~ : @ + ; names never contain '~'.
-  const docId = (name) => 'p-' + name.replace(/ /g, '~');
-
-  async function connectShared() {
-    const use = window.claude && typeof window.claude.use === 'function' ? window.claude.use : null;
-    if (!use) return;
-    let db = null;
-    try { db = await use.call(window.claude, 'db'); } catch (e) { db = null; }
-    if (!db) return;
-    board.db = db;
-    db.collection('leaderboard').orderBy('best', 'desc').limit(50).onSnapshot((snap) => {
-      board.mode = 'shared';
-      board.rows = snap.docs.map((doc) => validRow(doc.data())).filter(Boolean);
-      onBoardChange();
-    }, () => {
-      // Terminal: keep the last rows shown; with none yet, stay on the local table.
-      board.canWrite = false;
-      onBoardChange();
-    });
-  }
-
-  async function postShared(row, retried) {
-    if (!board.db || !board.canWrite) return;
-    try {
-      const ref = board.db.doc('leaderboard/' + docId(row.name));
-      const cur = await ref.get();
-      const prev = cur.exists ? validRow(cur.data()) : null;
-      if (prev && prev.best >= row.best) return;
-      await ref.set(row);
-    } catch (e) {
-      const code = e && e.code;
-      if (code === 'unavailable' && !retried) {
-        setTimeout(() => postShared(row, true), 800 + Math.random() * 1200);
-        return;
-      }
-      board.canWrite = false;
-      board.problem = code === 'quota_exceeded'
-        ? 'The shared leaderboard is full, so new players can\'t be added. Your scores are still saved in this browser.'
-        : 'Your scores can\'t be posted to the shared leaderboard, usually because your access to this page is view-only. Ask its owner for Contributor access. Your scores are still saved in this browser.';
-      onBoardChange();
-    }
-  }
-
   function recordResult() {
-    const name = profile.current;
-    const p = profile.players[name] || (profile.players[name] = newPlayer());
-    const sharedRow = board.mode === 'shared' ? board.rows.find((r) => r.name === name) : null;
-    const prevBest = Math.max(p.best, sharedRow ? sharedRow.best : 0);
+    const p = currentPlayer() || (profile.players[profile.current] = newPlayer());
+    const prevBest = p.best;
     p.games++;
-    const now = Date.now();
-    if (game.score > p.best) Object.assign(p, { best: game.score, wave: game.wave, at: now });
+    const entry = { n: p.games, score: game.score, wave: game.wave, at: Date.now() };
+    p.history.unshift(entry);
+    if (p.history.length > HISTORY_SIZE) p.history.length = HISTORY_SIZE;
+    if (game.score > p.best) Object.assign(p, { best: game.score, wave: game.wave, at: entry.at });
     saveProfile();
-    const improved = game.score > prevBest;
-    if (improved && board.mode === 'shared') {
-      const row = { name, best: game.score, wave: game.wave, at: now };
-      board.rows = board.rows.filter((r) => r.name !== name).concat(row);
-      postShared(row);
-    }
-    const rank = allRows().findIndex((r) => r.name === name) + 1;
-    return { improved, prevBest, rank: rank && rank <= BOARD_SIZE ? rank : 0 };
+    return { prevBest, entry, games: p.games };
   }
 
   const game = {
     state: 'title', // title | play | dying | clear | over
     paused: false,
     score: 0,
-    hi: boardBest(),
+    hi: playerBest(),
     hiAtStart: 0,
     lives: 3,
     wave: 1,
@@ -937,7 +896,7 @@
     if (!game.celebrated && game.hiAtStart > 0 && game.score > game.hiAtStart) {
       game.celebrated = true;
       $('hi').classList.add('record');
-      banner('New hi-score!');
+      banner('New personal best!');
       sfx.celebrate();
     }
     if (!game.extraGiven && game.score >= 1500) {
@@ -1221,33 +1180,45 @@
     });
   })();
 
-  let freshName = '';
+  let freshGame = null;
+  let boardOrder = 'latest';
+  const when = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   function renderBoard() {
+    const p = currentPlayer();
+    const name = profile.current;
+    $('boardHead').textContent = name ? `${name}'s games` : 'Your games';
+    $('sortLatest').setAttribute('aria-pressed', String(boardOrder === 'latest'));
+    $('sortBest').setAttribute('aria-pressed', String(boardOrder === 'best'));
+    const history = p ? p.history.slice() : [];
+    if (boardOrder === 'best') history.sort((a, b) => b.score - a.score || a.at - b.at);
+    const rows = history.slice(0, BOARD_SIZE);
     const list = $('boardList');
-    const rows = allRows().slice(0, BOARD_SIZE);
     list.textContent = '';
-    rows.forEach((e, i) => {
+    for (const g of rows) {
+      const isBest = p.best > 0 && g.score === p.best && g.at === p.at;
       const li = document.createElement('li');
-      if (e.name === profile.current) li.classList.add('me');
-      if (e.name === freshName) li.classList.add('fresh');
-      for (const [cls, text] of [['rank', String(i + 1).padStart(2, '0')], ['name', e.name], ['wave', `W${e.wave}`], ['pts', pad4(e.best)]]) {
+      if (isBest) li.classList.add('best');
+      if (g === freshGame) li.classList.add('fresh');
+      const cells = [['rank', `#${String(g.n).padStart(2, '0')}`], ['name', when.format(g.at) + (isBest ? ' · best' : '')], ['wave', `W${g.wave}`], ['pts', pad4(g.score)]];
+      for (const [cls, text] of cells) {
         const span = document.createElement('span');
         span.className = cls;
         span.textContent = text;
         li.appendChild(span);
       }
       list.appendChild(li);
-    });
+    }
+    $('boardStats').textContent = p && p.games
+      ? `${p.games} ${p.games === 1 ? 'game' : 'games'} played · best ${pad4(p.best)}${p.best ? ` (wave ${p.wave})` : ''}`
+      : '';
+    $('boardStats').hidden = !(p && p.games);
+    $('boardEmpty').textContent = name ? `No games yet for ${name}. Finish a game to start the record.` : 'Enter your name and play to start your record.';
     $('boardEmpty').hidden = rows.length > 0;
-    let note = 'Scores are saved in this browser, so everyone who plays on this device shares one leaderboard. It shows each player\'s best game.';
-    if (board.mode === 'shared') note = board.problem || 'Everyone who plays this page shares this leaderboard. It shows each player\'s best game.';
-    $('boardNote').textContent = note;
   }
 
-  function onBoardChange() {
-    if (!inRound()) game.hi = boardBest();
-    else game.hi = Math.max(game.hi, boardBest());
+  function setOrder(order) {
+    boardOrder = order;
     renderBoard();
   }
 
@@ -1260,6 +1231,9 @@
     $('ready').hidden = needName;
     $('greetName').textContent = profile.current;
     nameErr.hidden = true;
+    game.hi = playerBest();
+    $('hi').classList.remove('record');
+    renderBoard();
     const known = $('knownPlayers');
     known.textContent = '';
     Object.entries(profile.players)
@@ -1299,9 +1273,9 @@
     game.celebrated = false;
     $('hi').classList.remove('record');
     game.invaded = false;
-    game.hi = boardBest();
+    game.hi = playerBest();
     game.hiAtStart = game.hi;
-    freshName = '';
+    freshGame = null;
     renderBoard();
     shotsFired = 0;
     player.x = 16;
@@ -1322,17 +1296,14 @@
     if (ufo) { ufo = null; sfx.ufoStop(); }
     const result = recordResult();
     const name = profile.current;
-    freshName = result.improved ? name : '';
+    freshGame = result.entry;
     renderBoard();
-    const newHi = game.score > game.hiAtStart;
-    let rankText = 'No points this time.';
-    if (game.score > 0 && !result.improved) {
-      rankText = `${name}'s best is still ${pad4(result.prevBest)}.`;
-    } else if (game.score > 0 && result.prevBest === 0) {
-      rankText = result.rank ? `${name} made the leaderboard at #${result.rank}.` : `${name} is on the leaderboard, outside the top ${BOARD_SIZE}.`;
-    } else if (game.score > 0) {
-      rankText = `New personal best for ${name}` + (result.rank ? `, now #${result.rank} on the leaderboard.` : '.');
-    }
+    const newHi = game.score > game.hiAtStart && game.hiAtStart > 0;
+    let rankText = `Game ${result.games} for ${name}.`;
+    if (game.score === 0) rankText += ' No points this time.';
+    else if (result.prevBest === 0) rankText += ' First score on record.';
+    else if (game.score > result.prevBest) rankText += ` Up from ${pad4(result.prevBest)}.`;
+    else rankText += ` Best is still ${pad4(result.prevBest)}.`;
     $('overRank').textContent = rankText;
     $('overWhy').textContent = game.invaded ? 'The invaders reached the ground.' : 'Your last laser cannon is gone.';
     $('finalScore').textContent = pad4(game.score);
@@ -1403,13 +1374,17 @@
     keys[k] = false;
     if (!onButton(e) || (inRound() && !game.paused)) e.preventDefault();
   });
+  // Browsers only unlock audio on some events: a key, a mouse press, or a finger lifting.
   window.addEventListener('pointerdown', () => sfx.init());
+  window.addEventListener('pointerup', () => sfx.init());
   window.addEventListener('blur', () => { keys.left = keys.right = keys.fire = false; autoPause(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
 
   $('btnPlay').addEventListener('click', startGame);
   $('btnAgain').addEventListener('click', startGame);
   $('btnSwitchTitle').addEventListener('click', switchPlayer);
+  $('sortLatest').addEventListener('click', () => setOrder('latest'));
+  $('sortBest').addEventListener('click', () => setOrder('best'));
   $('btnSwitchOver').addEventListener('click', switchPlayer);
   $('signin').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1449,7 +1424,6 @@
   showTitle(false);
   renderBoard();
   hud();
-  connectShared();
   let last = performance.now(), acc = 0;
   function frame(now) {
     acc += Math.min(now - last, 100);
