@@ -372,10 +372,10 @@
   </footer>
   <p class="keys kbd"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> move &middot; <kbd>Space</kbd> fire &middot; <kbd>P</kbd> pause &middot; <kbd>M</kbd> sound</p>
   <section class="board" aria-labelledby="boardHead">
-    <h2 id="boardHead">High scores</h2>
+    <h2 id="boardHead">Leaderboard</h2>
     <ol class="board-list" id="boardList"></ol>
     <p class="board-empty" id="boardEmpty">No scores yet. Finish a game to set the first one.</p>
-    <p class="board-note">Players and scores are saved in this browser, so everyone who plays on this device shares one table.</p>
+    <p class="board-note" id="boardNote"></p>
   </section>
   <p class="sr" id="status" aria-live="polite"></p>
 </main>
@@ -662,27 +662,28 @@
   })();
 
   // ---------- Game state ----------
-  // ---------- Players and high scores (kept in this browser) ----------
-  // Falls back to memory for the visit when storage is blocked.
+  // ---------- Players and leaderboard ----------
+  // Each player's stats live in this browser (memory only when storage is
+  // blocked). The leaderboard is shared through the artifact's db when the
+  // page is published with it, and built from local players otherwise.
   let memoryCopy = null;
   function loadProfile() {
     let raw = memoryCopy;
     try { raw = localStorage.getItem(PLAYERS_KEY) ?? memoryCopy; } catch (e) { /* storage unavailable */ }
     let d = null;
     try { d = JSON.parse(raw); } catch (e) { /* corrupt or empty */ }
-    const out = { current: '', players: {}, scores: [] };
+    const out = { current: '', players: {} };
     if (!d || typeof d !== 'object') return out;
     if (d.players && typeof d.players === 'object') {
       for (const [name, p] of Object.entries(d.players)) {
-        if (NAME_RE.test(name) && p) out.players[name] = { best: Number(p.best) || 0, games: Number(p.games) || 0 };
+        if (!NAME_RE.test(name) || !p) continue;
+        out.players[name] = {
+          best: Number(p.best) || 0,
+          games: Number(p.games) || 0,
+          wave: Number(p.wave) || 1,
+          at: Number(p.at) || 0,
+        };
       }
-    }
-    if (Array.isArray(d.scores)) {
-      out.scores = d.scores
-        .filter((e) => e && NAME_RE.test(e.name) && Number.isFinite(e.score) && e.score > 0)
-        .map((e) => ({ name: e.name, score: e.score, wave: Number(e.wave) || 1, at: Number(e.at) || 0 }))
-        .sort((a, b) => b.score - a.score || a.at - b.at)
-        .slice(0, BOARD_SIZE);
     }
     if (typeof d.current === 'string' && out.players[d.current]) out.current = d.current;
     return out;
@@ -692,31 +693,95 @@
     try { localStorage.setItem(PLAYERS_KEY, memoryCopy); } catch (e) { /* storage unavailable */ }
   }
   const profile = loadProfile();
-  const boardBest = () => (profile.scores.length ? profile.scores[0].score : 0);
   const cleanName = (v) => v.trim().replace(/\s+/g, ' ').toUpperCase();
+  const newPlayer = () => ({ best: 0, games: 0, wave: 1, at: 0 });
 
   function signIn(name) {
     profile.current = name;
-    if (!profile.players[name]) profile.players[name] = { best: 0, games: 0 };
+    if (!profile.players[name]) profile.players[name] = newPlayer();
     saveProfile();
+  }
+
+  // mode: 'local' until the shared leaderboard delivers its first snapshot.
+  const board = { mode: 'local', db: null, rows: [], canWrite: true, problem: '' };
+  const byBest = (a, b) => b.best - a.best || a.at - b.at;
+
+  function validRow(d) {
+    if (!d || !NAME_RE.test(d.name)) return null;
+    const best = Number(d.best), wave = Number(d.wave);
+    if (!Number.isInteger(best) || best <= 0 || best > 999999) return null;
+    return { name: d.name, best, wave: Number.isInteger(wave) && wave > 0 && wave < 1000 ? wave : 1, at: Number(d.at) || 0 };
+  }
+
+  function allRows() {
+    if (board.mode === 'shared') return board.rows.slice().sort(byBest);
+    return Object.entries(profile.players)
+      .filter(([, p]) => p.best > 0)
+      .map(([name, p]) => ({ name, best: p.best, wave: p.wave, at: p.at }))
+      .sort(byBest);
+  }
+  const boardBest = () => { const rows = allRows(); return rows.length ? rows[0].best : 0; };
+
+  // Document ids allow only letters, digits and _ - . ~ : @ + ; names never contain '~'.
+  const docId = (name) => 'p-' + name.replace(/ /g, '~');
+
+  async function connectShared() {
+    const use = window.claude && typeof window.claude.use === 'function' ? window.claude.use : null;
+    if (!use) return;
+    let db = null;
+    try { db = await use.call(window.claude, 'db'); } catch (e) { db = null; }
+    if (!db) return;
+    board.db = db;
+    db.collection('leaderboard').orderBy('best', 'desc').limit(50).onSnapshot((snap) => {
+      board.mode = 'shared';
+      board.rows = snap.docs.map((doc) => validRow(doc.data())).filter(Boolean);
+      onBoardChange();
+    }, () => {
+      // Terminal: keep the last rows shown; with none yet, stay on the local table.
+      board.canWrite = false;
+      onBoardChange();
+    });
+  }
+
+  async function postShared(row, retried) {
+    if (!board.db || !board.canWrite) return;
+    try {
+      const ref = board.db.doc('leaderboard/' + docId(row.name));
+      const cur = await ref.get();
+      const prev = cur.exists ? validRow(cur.data()) : null;
+      if (prev && prev.best >= row.best) return;
+      await ref.set(row);
+    } catch (e) {
+      const code = e && e.code;
+      if (code === 'unavailable' && !retried) {
+        setTimeout(() => postShared(row, true), 800 + Math.random() * 1200);
+        return;
+      }
+      board.canWrite = false;
+      board.problem = code === 'quota_exceeded'
+        ? 'The shared leaderboard is full, so new players can\'t be added. Your scores are still saved in this browser.'
+        : 'Your scores can\'t be posted to the shared leaderboard, usually because your access to this page is view-only. Ask its owner for Contributor access. Your scores are still saved in this browser.';
+      onBoardChange();
+    }
   }
 
   function recordResult() {
     const name = profile.current;
-    const p = profile.players[name] || (profile.players[name] = { best: 0, games: 0 });
-    const personalBest = p.games > 0 && game.score > p.best;
+    const p = profile.players[name] || (profile.players[name] = newPlayer());
+    const sharedRow = board.mode === 'shared' ? board.rows.find((r) => r.name === name) : null;
+    const prevBest = Math.max(p.best, sharedRow ? sharedRow.best : 0);
     p.games++;
-    p.best = Math.max(p.best, game.score);
-    let rank = 0, entry = null;
-    if (game.score > 0) {
-      entry = { name, score: game.score, wave: game.wave, at: Date.now() };
-      profile.scores.push(entry);
-      profile.scores.sort((a, b) => b.score - a.score || a.at - b.at);
-      profile.scores = profile.scores.slice(0, BOARD_SIZE);
-      rank = profile.scores.indexOf(entry) + 1;
-    }
+    const now = Date.now();
+    if (game.score > p.best) Object.assign(p, { best: game.score, wave: game.wave, at: now });
     saveProfile();
-    return { rank, personalBest, entry: rank ? entry : null };
+    const improved = game.score > prevBest;
+    if (improved && board.mode === 'shared') {
+      const row = { name, best: game.score, wave: game.wave, at: now };
+      board.rows = board.rows.filter((r) => r.name !== name).concat(row);
+      postShared(row);
+    }
+    const rank = allRows().findIndex((r) => r.name === name) + 1;
+    return { improved, prevBest, rank: rank && rank <= BOARD_SIZE ? rank : 0 };
   }
 
   const game = {
@@ -1156,16 +1221,17 @@
     });
   })();
 
-  let freshEntry = null;
+  let freshName = '';
 
   function renderBoard() {
     const list = $('boardList');
+    const rows = allRows().slice(0, BOARD_SIZE);
     list.textContent = '';
-    profile.scores.forEach((e, i) => {
+    rows.forEach((e, i) => {
       const li = document.createElement('li');
       if (e.name === profile.current) li.classList.add('me');
-      if (e === freshEntry) li.classList.add('fresh');
-      for (const [cls, text] of [['rank', String(i + 1).padStart(2, '0')], ['name', e.name], ['wave', `W${e.wave}`], ['pts', pad4(e.score)]]) {
+      if (e.name === freshName) li.classList.add('fresh');
+      for (const [cls, text] of [['rank', String(i + 1).padStart(2, '0')], ['name', e.name], ['wave', `W${e.wave}`], ['pts', pad4(e.best)]]) {
         const span = document.createElement('span');
         span.className = cls;
         span.textContent = text;
@@ -1173,7 +1239,16 @@
       }
       list.appendChild(li);
     });
-    $('boardEmpty').hidden = profile.scores.length > 0;
+    $('boardEmpty').hidden = rows.length > 0;
+    let note = 'Scores are saved in this browser, so everyone who plays on this device shares one leaderboard. It shows each player\'s best game.';
+    if (board.mode === 'shared') note = board.problem || 'Everyone who plays this page shares this leaderboard. It shows each player\'s best game.';
+    $('boardNote').textContent = note;
+  }
+
+  function onBoardChange() {
+    if (!inRound()) game.hi = boardBest();
+    else game.hi = Math.max(game.hi, boardBest());
+    renderBoard();
   }
 
   const nameInput = $('playerName');
@@ -1226,7 +1301,7 @@
     game.invaded = false;
     game.hi = boardBest();
     game.hiAtStart = game.hi;
-    freshEntry = null;
+    freshName = '';
     renderBoard();
     shotsFired = 0;
     player.x = 16;
@@ -1246,13 +1321,18 @@
     shot = null;
     if (ufo) { ufo = null; sfx.ufoStop(); }
     const result = recordResult();
-    freshEntry = result.entry;
+    const name = profile.current;
+    freshName = result.improved ? name : '';
     renderBoard();
     const newHi = game.score > game.hiAtStart;
-    const name = profile.current;
-    let rankText = game.score > 0 ? `${name} didn't reach the top ${BOARD_SIZE} this time.` : 'No points this time.';
-    if (result.rank) rankText = `${name} placed #${result.rank} on the high-score table.`;
-    if (result.personalBest) rankText += ` New personal best for ${name}.`;
+    let rankText = 'No points this time.';
+    if (game.score > 0 && !result.improved) {
+      rankText = `${name}'s best is still ${pad4(result.prevBest)}.`;
+    } else if (game.score > 0 && result.prevBest === 0) {
+      rankText = result.rank ? `${name} made the leaderboard at #${result.rank}.` : `${name} is on the leaderboard, outside the top ${BOARD_SIZE}.`;
+    } else if (game.score > 0) {
+      rankText = `New personal best for ${name}` + (result.rank ? `, now #${result.rank} on the leaderboard.` : '.');
+    }
     $('overRank').textContent = rankText;
     $('overWhy').textContent = game.invaded ? 'The invaders reached the ground.' : 'Your last laser cannon is gone.';
     $('finalScore').textContent = pad4(game.score);
@@ -1369,6 +1449,7 @@
   showTitle(false);
   renderBoard();
   hud();
+  connectShared();
   let last = performance.now(), acc = 0;
   function frame(now) {
     acc += Math.min(now - last, 100);
