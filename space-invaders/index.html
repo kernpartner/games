@@ -54,6 +54,8 @@
   .hud .val { display: block; font-size: clamp(16px, 3.4vw, 22px); font-variant-numeric: tabular-nums; }
   .hud .c { text-align: center; }
   .hud .r { text-align: right; }
+  .hud .val.record { color: var(--red); animation: record 0.5s steps(2, jump-none) 8; }
+  @keyframes record { 50% { opacity: 0.25; } }
 
   .stage {
     position: relative;
@@ -228,6 +230,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .btn:active { transform: none; }
+    .hud .val.record { animation: none; }
   }
 </style>
 </head>
@@ -471,7 +474,7 @@
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
     const live = () => ac && ac.state === 'running';
-    function tone(f0, dur, { type = 'square', vol = 0.08, f1 = 0, delay = 0 } = {}) {
+    function tone(f0, dur, { type = 'square', vol = 0.08, f1 = 0, delay = 0, cutoff = 0 } = {}) {
       if (!live()) return;
       const t = ac.currentTime + delay;
       const o = ac.createOscillator(), g = ac.createGain();
@@ -480,17 +483,25 @@
       if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
       g.gain.setValueAtTime(vol, t);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g); g.connect(master);
+      if (cutoff) {
+        const f = ac.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.value = cutoff;
+        o.connect(f); f.connect(g);
+      } else {
+        o.connect(g);
+      }
+      g.connect(master);
       o.start(t); o.stop(t + dur + 0.05);
     }
-    function noise(dur, vol, cutoff) {
+    function noise(dur, vol, cutoff, { delay = 0, highpass = false } = {}) {
       if (!live()) return;
-      const t = ac.currentTime;
+      const t = ac.currentTime + delay;
       const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
       s.buffer = noiseBuf;
-      f.type = 'lowpass';
+      f.type = highpass ? 'highpass' : 'lowpass';
       f.frequency.setValueAtTime(cutoff, t);
-      f.frequency.exponentialRampToValueAtTime(Math.max(60, cutoff / 8), t + dur);
+      if (!highpass) f.frequency.exponentialRampToValueAtTime(Math.max(60, cutoff / 8), t + dur);
       g.gain.setValueAtTime(vol, t);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       s.connect(f); f.connect(g); g.connect(master);
@@ -507,6 +518,39 @@
       death() { noise(1.0, 0.35, 1400); tone(160, 0.9, { type: 'sawtooth', vol: 0.05, f1: 40 }); },
       ufoHit() { for (let i = 0; i < 6; i++) tone(1200 - i * 140, 0.08, { vol: 0.05, delay: i * 0.07 }); },
       extra() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, { vol: 0.05, delay: i * 0.09 })); },
+      // An original two-bar disco vamp at 120 BPM (Am7, D7, E7, resolving to A).
+      celebrate() {
+        if (!live()) return;
+        const beat = 0.5, eighth = beat / 2, end = 8 * beat;
+        for (let i = 0; i < 8; i++) {
+          tone(150, 0.16, { type: 'sine', vol: 0.45, f1: 42, delay: i * beat });
+          noise(i % 2 ? 0.18 : 0.06, 0.08, 8000, { delay: i * beat + eighth, highpass: true });
+        }
+        const roots = [55, 55, 55, 55, 73.4, 73.4, 82.4, 82.4];
+        roots.forEach((f, i) => {
+          tone(f, eighth * 0.9, { type: 'sawtooth', vol: 0.12, cutoff: 700, delay: i * beat });
+          tone(f * 2, eighth * 0.9, { type: 'sawtooth', vol: 0.12, cutoff: 700, delay: i * beat + eighth });
+        });
+        const stabs = [
+          [0.75, [220, 261.6, 329.6, 392]],
+          [1.75, [220, 261.6, 329.6, 392]],
+          [2.75, [293.7, 370, 440, 523.3]],
+          [3.75, [329.6, 415.3, 493.9, 587.3]],
+        ];
+        for (const [at, chord] of stabs) {
+          for (const f of chord) tone(f, 0.16, { type: 'sawtooth', vol: 0.03, cutoff: 2400, delay: at });
+        }
+        const lick = [
+          [0, 440, 0.2], [0.25, 523.3, 0.2], [0.5, 659.3, 0.2], [0.75, 784, 0.45], [1.5, 880, 0.2], [1.75, 784, 0.2],
+          [2, 740, 0.2], [2.25, 880, 0.2], [2.5, 1046.5, 0.45], [3, 987.8, 0.2], [3.25, 830.6, 0.2], [3.5, 987.8, 0.2],
+          [3.75, 1174.7, 0.2], [end, 1108.7, 0.9],
+        ];
+        for (const [at, f, dur] of lick) tone(f, dur, { vol: 0.035, cutoff: 3500, delay: at });
+        tone(220, 0.45, { type: 'sawtooth', vol: 0.03, f1: 880, cutoff: 3000, delay: end - 0.45 });
+        tone(150, 0.3, { type: 'sine', vol: 0.5, f1: 40, delay: end });
+        tone(55, 0.9, { type: 'sawtooth', vol: 0.12, cutoff: 500, delay: end });
+        for (const f of [220, 277.2, 329.6, 440, 554.4]) tone(f, 1.0, { type: 'sawtooth', vol: 0.025, cutoff: 2000, delay: end });
+      },
       ufoStart() {
         if (!live() || ufoNodes) return;
         const t = ac.currentTime;
@@ -548,6 +592,7 @@
     lives: 3,
     wave: 1,
     extraGiven: false,
+    celebrated: false,
     invaded: false,
     tick: 0,
     stateT: 0,
@@ -688,6 +733,12 @@
   function addScore(n) {
     game.score += n;
     if (game.score > game.hi) game.hi = game.score;
+    if (!game.celebrated && game.hiAtStart > 0 && game.score > game.hiAtStart) {
+      game.celebrated = true;
+      $('hi').classList.add('record');
+      banner('New hi-score!');
+      sfx.celebrate();
+    }
     if (!game.extraGiven && game.score >= 1500) {
       game.extraGiven = true;
       game.lives++;
@@ -974,6 +1025,8 @@
     game.lives = 3;
     game.wave = 1;
     game.extraGiven = false;
+    game.celebrated = false;
+    $('hi').classList.remove('record');
     game.invaded = false;
     game.hiAtStart = game.hi;
     shotsFired = 0;

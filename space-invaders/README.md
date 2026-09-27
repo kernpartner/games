@@ -20,4 +20,4 @@ A single-file browser remake of the 1978 arcade game. Open `index.html` in any m
 - Shields and the ground line erode pixel by pixel from both sides' shots, and invaders chew through shields as they descend.
 - Extra laser cannon at 1500 points. Each new wave starts lower. If the invaders reach the ground, the game ends whatever your lives.
 
-The hi-score and sound preference are kept in `localStorage`.
+The hi-score and sound preference are kept in `localStorage`. Beating your previous hi-score mid-game plays a short disco-style celebration jingle. It's an original tune, synthesized live with WebAudio, and flashes the hi-score counter.
